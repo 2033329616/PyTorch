@@ -2,3 +2,4 @@
 !/basic/data/MNIST
 /basic/model/
 /extend/data
+/extend/vision/feature_h5
