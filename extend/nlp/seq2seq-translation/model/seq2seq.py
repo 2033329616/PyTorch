@@ -111,8 +111,7 @@ class AttnDecoderRNN(nn.Module):
         self.attn = nn.Linear(self.hidden_size*2, self.max_length)           # ??? why input_dim = hidden*2
         self.attn_combine = nn.Linear(self.hidden_size*2, self.hidden_size)  # ???
         self.dropout = nn.Dropout(dropout_p)                                 # ???
-        self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size,
-                          num_layers=n_layers, batch_first=True)
+        self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size, batch_first=True)
         self.out = nn.Linear(hidden_size, vocab_size)                        # # (N,seq,vocab_size)  softmax???
         
     def forward(self, input_t, hidden_t, encoder_ouputs):
@@ -130,7 +129,7 @@ class AttnDecoderRNN(nn.Module):
         # compute the attention weight
         # embedded:(N,seq,hidden), here seq=1  |  hidden_t:(1,N,hidden)    ???seq不唯一怎么处理???
         embedded_cat = torch.cat([embedded, hidden_t.permute(1,0,2)], 2)   # get (N,1,2*hidden)
-        attn_weights = F.softmax(self.attn(embedded_cat))                  # get (N,1,max_length)
+        attn_weights = F.softmax(self.attn(embedded_cat), dim=2)           # get (N,1,max_length)
         
         # (N,1,max_length)*(N,max_length,hidden) => (N,1,hidden)           batch multiply
         attn_applied = torch.matmul(attn_weights, encoder_ouputs)          # get (N,1,hidden)
@@ -142,7 +141,7 @@ class AttnDecoderRNN(nn.Module):
             weight = F.relu(weight_out)                                    # ??? 
             weight_out, hidden_t = self.gru(weight_out, hidden_t)
         
-        output = F.log_softmax(self.out(weight_out))                       # get (N,1,vocab_size)
+        output = F.log_softmax(self.out(weight_out), dim=2)                # get (N,1,vocab_size)
         return output, hidden_t, attn_weights
     
     def initHidden(self):
@@ -164,14 +163,15 @@ if __name__ == '__main__':
     print('1.Input tensor:', test_in.shape)
     decoder = DecoderRNN(1000, 128, 2).to(device)
     hidden_0 = decoder.initHidden().to(device)
-    output, hidden = encoder(test_in, hidden_0)                      # output:(batch,seq,hidden*direction)
+    output, hidden = decoder(test_in, hidden_0)                      # output:(batch,seq,hidden*direction)
     print('2.output and hidden shape:', output.shape, hidden.shape)
 
-    # 3.test the attndecode model
+    # test the decode model
     test_in = torch.randint(1,1000, [1,1]).long().to(device)        # input before Embedding must be LongTensor 
     print('1.Input tensor:', test_in.shape)
     decoder = AttnDecoderRNN(1000, 128, 2).to(device)
     hidden_0 = decoder.initHidden().to(device)
-    output, hidden = encoder(test_in, hidden_0)                      # output:(batch,seq,hidden*direction)
-    print('2.output and hidden shape:', output.shape, hidden.shape)
+    encoder_outputs = torch.randn([1,MAX_LENGTH,128]).to(device)
+    output, hidden, attn_weight = decoder(test_in, hidden_0, encoder_outputs)    # output:(batch,seq,hidden*direction)
+    print('2.output and hidden shape:', output.shape, hidden.shape, attn_weight.shape)
 
